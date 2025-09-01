@@ -105,6 +105,6 @@ module VolpanoSmithIrvine{
         }
     }
 
-    /** Interestingly, it seems unnecessary to use the subtype relation explicitly */
+    /** We prove the information flow property in another file named "VSITypeSoundness.dfy" */
 
 }
