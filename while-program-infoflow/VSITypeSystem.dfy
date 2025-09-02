@@ -40,6 +40,11 @@ module VolpanoSmithIrvine{
             case Invalid => InvalidBase
         }
     }
+    // Join makes a subtype; Meet makes a supertype.
+    lemma SubTypeJoin(t1: BaseType, t2: BaseType)
+    requires t1 != InvalidBase && t2 != InvalidBase
+    ensures SubType(t1, Join(t1, t2)) && SubType(t2, Join(t1, t2))
+    {}
 
     // the subtype relation for expressions and commands
     predicate ExprSubType(t1: PhraseType, t2: PhraseType)
