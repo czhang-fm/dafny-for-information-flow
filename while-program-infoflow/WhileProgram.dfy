@@ -86,4 +86,19 @@ module WhileProgram{
     ensures typeOK(s') && VariablesInCmd(c') <= s'.Keys
     {}
 
+    // Next we define how a program terminates within n steps of transitions
+    predicate Terminates(c: Cmd, s: MState, s': MState, n: int)
+    requires typeOK(s) && typeOK(s') && n >= 0
+    requires VariablesInCmd(c) <= s.Keys == s'.Keys
+    decreases n
+    {
+        match c {
+            case Skip => s == s' 
+            case _ => 
+                var (s1, c1) := TransitionSmallStep(s, c); 
+                TransitionSmallStepTypeOK(s, c, s1, c1);
+                n >= 1 && Terminates(c1, s1, s', n-1)
+        }
+    }
+
 }
