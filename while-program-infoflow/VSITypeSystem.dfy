@@ -23,11 +23,13 @@ module VolpanoSmithIrvine{
     }
     // the join operator on security types: used for expression types
     function Join(t1: BaseType, t2: BaseType) : BaseType
+    requires t1 != InvalidBase && t2 != InvalidBase
     {
         if t1 == High then t1 else t2
     }
     // the meet operator on security types: used for command types
     function Meet(t1: BaseType, t2: BaseType) : BaseType
+    requires t1 != InvalidBase && t2 != InvalidBase
     {
         if t1 == Low then t1 else t2
     }
@@ -71,7 +73,7 @@ module VolpanoSmithIrvine{
 
     // The following defines a type system for the while programming language
     // We start with the expression types
-    // This function never produces Invalid
+    // This function never produces Invalid, which is left for a proof later ....
     function HasExprType(ctx: Context, e: Expr): PhraseType
     requires VariablesInExpr(e) <= ctx.Keys
     decreases e
@@ -82,7 +84,9 @@ module VolpanoSmithIrvine{
             case Var(x) => 
                 ExprType(ctx[x])
             case Plus(e1, e2) => 
-                var t1, t2 := HasExprType(ctx, e1), HasExprType(ctx, e2); ExprType(Join(GetBaseType(t1), GetBaseType(t2)))
+                var t1, t2 := HasExprType(ctx, e1), HasExprType(ctx, e2); 
+                var t1, t2 := GetBaseType(t1), GetBaseType(t2);
+                if t1 == InvalidBase || t2 == InvalidBase then Invalid else ExprType(Join(t1, t2))
         }
     }
     // We then work with the command types: if type checking fails, the return type will be Invalid
