@@ -73,7 +73,7 @@ module VolpanoSmithIrvine{
 
     // The following defines a type system for the while programming language
     // We start with the expression types
-    // This function never produces Invalid, which is left for a proof later ....
+    // This function never produces Invalid, which is left for a proof in the soundness file ....
     function HasExprType(ctx: Context, e: Expr): PhraseType
     requires VariablesInExpr(e) <= ctx.Keys
     decreases e

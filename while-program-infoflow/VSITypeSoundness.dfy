@@ -43,7 +43,7 @@ module VSISoundness {
             case Seq(c1, c2) => // sequential composition
                 match c1 {
                     case Skip => 
-                        s', c' := SubjectReduction(s, ctx, c2); 
+                        s', c' := s, c2; 
                         assert TransitionSmallStep(s, c) == (s', c');
                     case _ => 
                         var s1', c1' := SubjectReduction(s, ctx, c1); 
