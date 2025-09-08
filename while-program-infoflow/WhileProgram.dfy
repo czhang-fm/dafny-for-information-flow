@@ -66,7 +66,7 @@ module WhileProgram{
                 if (res != 0) then (s, Seq(c1, c)) else (s, Skip)
             case Seq(c1, c2) => // sequential composition
                 match c1 {
-                    case Skip => TransitionSmallStep(s, c2)
+                    case Skip => (s, c2) // removing the first skip
                     case _ => 
                         var (s', c') := TransitionSmallStep(s, c1); (s', Seq(c', c2))
                 }
@@ -108,6 +108,7 @@ module WhileProgram{
         }
     }
     // One step termination: after a small step, the remaining program terminates
+    // The proof of this lemma may be significantly simplified ... later
     lemma {:induction false} SmallStepTermination(s1: MState, s2: MState, c: Cmd, k: int) returns (s': MState, c': Cmd)
     requires typeOK(s1) && typeOK(s2) && k >= 0
     requires VariablesInCmd(c) <= s1.Keys == s2.Keys
@@ -119,7 +120,7 @@ module WhileProgram{
     ensures Terminates(c', s', s2, k-1)
     {
         match c {
-            case Skip => 
+            case Skip => // already termination
                 assert false;
             case Assn(x, e) => // assignment
                 s', c' := s1[x:= Evaluate(s1, e)], Skip;
@@ -148,7 +149,7 @@ module WhileProgram{
             case Seq(c1, c2) => // sequential composition
                 match c1 {
                     case Skip => 
-                        var p := TransitionSmallStep(s1, c2);
+                        var p := TransitionSmallStep(s1, Seq(Skip, c2)); // removing the first Skip takes 1 step
                         s', c' := p.0, p.1;
                         TransitionSmallStepTypeOK(s1, c, s', c');
                         assert typeOK(s');
@@ -165,77 +166,39 @@ module WhileProgram{
         assert VariablesInCmd(c') <= s'.Keys == s2.Keys;
         assert Terminates(c', s', s2, k-1);
     }
-    // The complement of the above lemma, to prove later ...
-    lemma {:axiom} SkipTermination(s1: MState, s2: MState, c: Cmd, k: int)
-    requires typeOK(s1) && typeOK(s2) && k >= 0
-    requires VariablesInCmd(c) <= s1.Keys == s2.Keys
-    requires Terminates(Seq(Skip, c), s1, s2, k)
-    ensures Terminates(c, s1, s2, k)
-    // {}
 
-    // Multiple step termination for sequential composition
+    // Multiple steps termination for sequential composition
     lemma {:induction false} Sequencing(s1: MState, s2: MState, c1: Cmd, c2: Cmd, k: int) returns (s': MState, k': int)
     requires typeOK(s1) && typeOK(s2) && k >= 0
     requires VariablesInCmd(c1) <= s1.Keys == s2.Keys
     requires VariablesInCmd(c2) <= s1.Keys == s2.Keys
     requires Terminates(Seq(c1, c2), s1, s2, k)
-    // requires !EmptyCmd(c1)
     ensures typeOK(s') 
-    ensures k' >= 0 && k - k' >= 0 
+    ensures k' >= 0 && k - k' -1 >= 0 
     ensures VariablesInCmd(c1) <= s1.Keys == s2.Keys == s'.Keys
     ensures VariablesInCmd(c2) <= s1.Keys == s2.Keys == s'.Keys
     ensures Terminates(c1, s1, s', k')
-    ensures Terminates(c2, s', s2, k - k')
+    ensures Terminates(c2, s', s2, k - k'-1)
     decreases k, c1, c2
     {
         if (EmptyCmd(c1)){ // c1 == Skip // the base case
             s' := s1; 
             k' := 0;
             assert typeOK(s');
-            SkipTermination(s1, s2, c2, k);
-            assert Terminates(c1, s1, s', k');
-            assert Terminates(c2, s', s2, k - k');
+            assert (s', c2) == TransitionSmallStep(s1, Seq(c1, c2));
+            assert Terminates(c1, s1, s', 0);
+            assert Terminates(c2, s', s2, k -1);
         } else {
-            // need to consider a number of cases for c1
-            match c1 {
-                case Seq(c3, c4) => // sequential composition
-                    // if (EmptyCmd(c3) && EmptyCmd(c4)){ // Seq(Skip, Skip) => Skip 
-                    //     s' := s1; 
-                    //     k' := 1;
-                    //     assert Terminates(c1, s1, s', k');
-                    //     assert Terminates(c2, s', s2, k - k');
-                    // } // the above case is covered by the following case
-                    if (EmptyCmd(c3)) {
-                        var (s3, c5) := TransitionSmallStep(s1, c4);
-                        assert (s3, Seq(c5, c2)) == TransitionSmallStep(s1, Seq(c1, c2));
-                        TransitionSmallStepTypeOK(s1, Seq(c1,c2), s3, Seq(c5,c2));
-                        assert Terminates(Seq(c5, c2), s3, s2, k-1);
-                        assert typeOK(s3);
-                        var s4, k2 := Sequencing(s3, s2, c5, c2, k-1);
-                        s', k' := s4, k2+1;
-                        assert Terminates(c2, s', s2, k-k');
-                        assert Terminates(c1, s1, s', k');
-                    } else {
-                        var (s3, c5) := TransitionSmallStep(s1, c3); 
-                        assert (s3, Seq(Seq(c5, c4), c2)) == TransitionSmallStep(s1, Seq(c1, c2));
-                        TransitionSmallStepTypeOK(s1, Seq(c1,c2), s3, Seq(Seq(c5, c4), c2));
-                        assert Terminates(Seq(Seq(c5, c4), c2), s3, s2, k-1);
-                        assert typeOK(s3);
-                        var s4, k2 := Sequencing(s3, s2, Seq(c5, c4), c2, k-1);
-                        s', k' := s4, k2+1;
-                    }
-                case _ =>
-                    var (s3, c3) := TransitionSmallStep(s1, c1);
-                    assert (s3, Seq(c3, c2)) == TransitionSmallStep(s1, Seq(c1, c2));
-                    TransitionSmallStepTypeOK(s1, Seq(c1, c2), s3, Seq(c3, c2));
-                    assert Terminates(Seq(c3, c2), s3, s2, k-1);
-                    assert typeOK(s3);
-                    var s4, k2 := Sequencing(s3, s2, c3, c2, k-1);
-                    assert Terminates(c3, s3, s4, k2); 
-                    assert Terminates(c1, s1, s4, k2 + 1);
-                    s', k' := s4, k2+1;
-                    assert Terminates(c2, s4, s2, k-k'); 
-            }
+            var (s3, c3) := TransitionSmallStep(s1, c1);
+            assert (s3, Seq(c3, c2)) == TransitionSmallStep(s1, Seq(c1, c2));
+            TransitionSmallStepTypeOK(s1, Seq(c1, c2), s3, Seq(c3, c2));
+            assert Terminates(Seq(c3, c2), s3, s2, k-1);
+            assert typeOK(s3);
+            var s4, k2 := Sequencing(s3, s2, c3, c2, k-1);
+            assert Terminates(c3, s3, s4, k2); 
+            assert Terminates(c1, s1, s4, k2 + 1);
+            s', k' := s4, k2+1;
+            assert Terminates(c2, s4, s2, k-k'-1); 
         }
     }
 }
