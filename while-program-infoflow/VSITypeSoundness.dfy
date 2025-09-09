@@ -160,4 +160,59 @@ module VSISoundness {
 
     // Finally, the Noninterference property is proved in the following lemma
     // 
+    lemma {:induction false} Noninterference(ctx: Context, s1: MState, s2: MState, c: Cmd, s1': MState, s2': MState, k1: int, k2: int)
+    requires ctx.Keys == s1.Keys == s2.Keys == s1'.Keys == s2'.Keys
+    requires typeOK(s1) && typeOK(s2) && typeOK(s1') && typeOK(s2')
+    requires VariablesInCmd(c) <= ctx.Keys
+    requires forall x :: x in ctx.Keys ==> ctx[x] != InvalidBase
+    requires HasCmdType(ctx, c) != Invalid // c is well typed under ctx
+    requires LowEquiv(ctx, s1, s2)
+    requires k1 >= 0 && Terminates(c, s1, s1', k1)
+    requires k2 >= 0 && Terminates(c, s2, s2', k2)
+    ensures LowEquiv(ctx, s1', s2')
+    decreases k1, k2, c
+    {
+        match c {
+            case Skip => assert LowEquiv(ctx, s1', s2'); // trivial
+            case Assn(x, e) => // assignment
+                if HasCmdType(ctx, c) == CmdType(High) {
+                    Confinement(ctx, s1, s1', c, k1);
+                    Confinement(ctx, s2, s2', c, k2);
+                } else { // CmdType(Low)
+                    LowEquivExpr(ctx, s1, s2, e); 
+                }
+            case If(e, c1, c2) => // if-then-else
+                if HasCmdType(ctx, c) == CmdType(High) {
+                    Confinement(ctx, s1, s1', c, k1); // Dafny identifies transitivity of Low-equiv
+                    Confinement(ctx, s2, s2', c, k2);
+                } else { // CmdType(Low)
+                    assert HasExprType(ctx, e) == ExprType(Low);
+                    LowEquivExpr(ctx, s1, s2, e); 
+                    var res := Evaluate(s1, e); 
+                    if res != 0 {
+                        Noninterference(ctx, s1, s2, c1, s1', s2', k1-1, k2-1);
+                    } else {
+                        Noninterference(ctx, s1, s2, c2, s1', s2', k1-1, k2-1);
+                    }
+                }
+            case While(e, c1) => // while-loop
+                if HasCmdType(ctx, c) == CmdType(High) {
+                    Confinement(ctx, s1, s1', c, k1);
+                    Confinement(ctx, s2, s2', c, k2);
+                } else { // CmdType(Low)
+                    LowEquivExpr(ctx, s1, s2, e); 
+                    var res := Evaluate(s1, e);
+                    if res == 0 {
+                        assert (s1, Skip) == TransitionSmallStep(s1, c); // trivial
+                    } else {
+                        Noninterference(ctx, s1, s2, Seq(c1, c), s1', s2', k1-1, k2-1);
+                    }
+                }
+            case Seq(c1, c2) => // sequential composition
+                var s12, k12 := Sequencing(s1, s1', c1, c2, k1);
+                var s22, k22 := Sequencing(s2, s2', c1, c2, k2);
+                Noninterference(ctx, s1, s2, c1, s12, s22, k12, k22);
+                Noninterference(ctx, s12, s22, c2, s1', s2', k1-k12-1, k2-k22-1);
+        }
+    }
 }
