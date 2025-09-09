@@ -119,6 +119,45 @@ module VSISoundness {
         }
     }
 
-    // Finally, the Noninterference property is proved in the following
+    // Confinement: if a program is typed High, then only High variables are updated during the execution
+    lemma {:induction false} Confinement(ctx: Context, s1: MState, s2: MState, c: Cmd, k: int)
+    requires ctx.Keys == s1.Keys == s2.Keys
+    requires typeOK(s1) && typeOK(s2)
+    requires VariablesInCmd(c) <= ctx.Keys
+    requires forall x :: x in ctx.Keys ==> ctx[x] != InvalidBase
+    requires HasCmdType(ctx, c) == CmdType(High)
+    requires k >= 0 && Terminates(c, s1, s2, k)
+    ensures LowEquiv(ctx, s1, s2)
+    decreases k, c
+    {
+        match c {
+            case Skip => assert LowEquiv(ctx, s1, s2); // trivial
+            case Assn(x, e) => // assignment
+                assert ctx[x] == High; 
+            case If(e, c1, c2) => // if-then-else
+                assert HasCmdType(ctx, c1) == CmdType(High);
+                assert HasCmdType(ctx, c2) == CmdType(High);
+                var s', c' := SmallStepTermination(s1, s2, c, k);
+                if c' == c1 {
+                    Confinement(ctx, s', s2, c1, k-1);
+                } else {
+                    Confinement(ctx, s', s2, c2, k-1);
+                }
+            case While(e, c1) => // while-loop
+                var s', c' := SmallStepTermination(s1, s2, c, k);
+                if c' == Skip {
+                    assert LowEquiv(ctx, s1, s2);
+                } else {
+                    assert LowEquiv(ctx, s1, s');
+                    Confinement(ctx, s', s2, Seq(c1, c), k-1);
+                }
+            case Seq(c1, c2) => // sequential composition
+                var s', k' := Sequencing(s1, s2, c1, c2, k);
+                Confinement(ctx, s1, s', c1, k');
+                Confinement(ctx, s', s2, c2, k-k'-1);
+        }
+    }
+
+    // Finally, the Noninterference property is proved in the following lemma
     // 
 }
