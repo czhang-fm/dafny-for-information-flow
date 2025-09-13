@@ -9,7 +9,7 @@
     type Variable(==)
     type Address = nat
 
-    const variables : iset<Variable>
+    // const variables : iset<Variable>
     
     datatype Value = 
         | Err
@@ -31,6 +31,9 @@
  
     type MState = map<Address, Value>
 
+    lemma {: axiom} FreshVariable(vars : set<Variable>) returns (v: Variable)
+    ensures v !in vars
+
     // Get a set of free variables in an expression
     function FreeVariables(e: Expression) : set<Variable>
     {
@@ -51,6 +54,8 @@
     }
     // substitute each occurrence of y in e1 with e2
     function Subst(e1: Expression, y: Variable, e2: Expression): Expression 
+    requires y !in FreeVariables(e2)
+    ensures FreeVariables(Subst(e1, y, e2)) <= FreeVariables(e1) + FreeVariables(e2) - {y}
     {
         // the case that y does not appear in e1 should be handled directly in the semantics
         if ! (y in FreeVariables(e1)) then e1 else (
@@ -67,18 +72,23 @@
 
     // This defines a large-step operational semantics
     method Eval(m: MState, e: Expression) returns (m': MState, v: Value)
-    requires FreeVariables(e) == {} //!e.Var?
-    decreases e
+    requires FreeVariables(e) == {} // e contains no free variable
+    requires forall a : Address :: a in m ==> FreeVariables(Val(m[a])) == {}
+    ensures FreeVariables(Val(v)) == {}
+    ensures forall a : Address :: a in m' ==> FreeVariables(Val(m'[a])) == {}
+    decreases *
     {
         match e {
-            case Val(_) => m', v := m, e.v;
+            case Val(_) => m', v := m, e.v; assert FreeVariables(Val(v)) == {}; // *
             // case Var(x) => 
             case Alloc(e2) => 
                 // ALLOC 
                 var m1, v1 := Eval(m, e2);
                 // var a: Address :| a !in m1;
                 var a := FindFresh(m.Keys); 
-                m', v := m1[a := v1], Addr(a);
+                m', v := m1[a := v1], Addr(a); 
+                assert FreeVariables(Val(v)) == {}; 
+                assert forall a : Address :: a in m' ==> FreeVariables(Val(m'[a])) == {}; // *
             case Assn(l, r) => 
                 // ASSIGN
                 var m1, a := Eval(m, l); 
@@ -86,27 +96,35 @@
                 if a.Addr?{
                     m', v := m2[a.a := v], v;
                 } else {
-                    m', v := map[], Err;
+                    m', v := m2, Err;
                 }
+                assert FreeVariables(Val(v)) == {}; 
+                assert forall a : Address :: a in m' ==> FreeVariables(Val(m'[a])) == {}; // *
             case App(f, e2) => 
                 // APP
                 var m1, f1 := Eval(m, f);
+                assert FreeVariables(Val(f1)) == {};
                 if f1.Func?{
                     var m2, v := Eval(m1, e2);
+                    assert FreeVariables(Val(v)) == {};
                     var e3 := Subst(f1.e, f1.x, Val(v));
-                    m', v := Eval(m2, e3); // need to show that e3 doesn't contain free variables
+                    assert FreeVariables(e3) == {};
+                    m', v := Eval(m2, e3);
+                    assert FreeVariables(Val(v)) == {};
                 } else {
-                    m', v := map[], Err;
+                    m', v := m1, Err;
+                    assert FreeVariables(Val(v)) == {};
                 }
-                
             case Deref(e2) => 
                 // DEREF
                 var m1, v := Eval(m, e2);
-                if v.Addr?{
+                if v.Addr? && v.a in m1 {
                     m', v := m1, m1[v.a]; // v.a might not be in the domain of m1 ?
                 } else {
-                    m', v := map[], Err;
+                    m', v := m1, Err;
                 }
+                assert FreeVariables(Val(v)) == {}; 
+                assert forall a : Address :: a in m' ==> FreeVariables(Val(m'[a])) == {}; // *
                 
             case If(cond, thn, els) => 
                 // THEN && ELSE
@@ -119,8 +137,10 @@
                         m', v := Eval(m1, els);
                     }
                 } else {
-                    m', v := map[], Err;
+                    m', v := m1, Err; // map[], Err;
                 }
+                assert FreeVariables(Val(v)) == {}; 
+                assert forall a : Address :: a in m' ==> FreeVariables(Val(m'[a])) == {}; // *
             case Plus(l, r) => 
                 // OP
                 var m1, v1 := Eval(m, l);
@@ -128,9 +148,14 @@
                 if v1.Num? && v2.Num?{
                     m', v := m2, Num(v1.n + v2.n);
                 } else {
-                    m', v := map[], Err;
+                    m', v := m2, Err;
                 }
+                assert FreeVariables(Val(v)) == {}; 
+                assert forall a : Address :: a in m' ==> FreeVariables(Val(m'[a])) == {}; // *
+            // case _ => m', v := m, Err;
         }
+        // assert FreeVariables(Val(v)) == {}; 
+        // assert forall a : Address :: a in m' ==> FreeVariables(Val(m'[a])) == {}; // *
     }
 
  }
