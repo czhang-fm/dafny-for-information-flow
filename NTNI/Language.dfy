@@ -154,6 +154,8 @@
                 assert forall a : Address :: a in m' ==> FreeVariables(Val(m'[a])) == {}; // *
             // case _ => m', v := m, Err;
         }
+        // We define a default value if the method does not terminate.
+        m', v := m, Err;
         // assert FreeVariables(Val(v)) == {}; 
         // assert forall a : Address :: a in m' ==> FreeVariables(Val(m'[a])) == {}; // *
     }
