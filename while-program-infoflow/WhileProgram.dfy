@@ -1,11 +1,14 @@
 /* We start with the syntax and semantics for the simple while language 
  */
 module WhileProgram{
+    // The type for all variables
     type Variable(==)
+    // The type for all expressions (RHS of an assignment)
     datatype Expr = 
         | Num(n: int) 
         | Var(x: Variable) 
         | Plus(e1: Expr, e2: Expr)
+    // The type for all commands (statements). A program is a command.
     datatype Cmd = 
         | Skip 
         | Assn(x: Variable, e: Expr) 
@@ -14,11 +17,15 @@ module WhileProgram{
         | Seq(c1: Cmd, c2: Cmd)
 
     /* In the following we define the SOS rules */
+    
+    // First we define a finite set of variables
     const variables: set<Variable>
+    // A state is a mapping from variables to values
     type MState = map<Variable, int>
     ghost predicate typeOK(s: MState){
         s.Keys <= variables
     }
+
     /* The set of variables in an expression */
     function VariablesInExpr(e: Expr): set<Variable>
     {
@@ -36,7 +43,7 @@ module WhileProgram{
             case Assn(x, e) => {x} + VariablesInExpr(e)
             case If(e, c1, c2) => VariablesInExpr(e) + VariablesInCmd(c1)+ VariablesInCmd(c2)
             case While(e, c) => VariablesInExpr(e) + VariablesInCmd(c)
-            case Seq(c1, c2) => VariablesInCmd(c1)+ VariablesInCmd(c2)
+            case Seq(c1, c2) => VariablesInCmd(c1) + VariablesInCmd(c2)
         }
     }
     function Evaluate(s: MState, e: Expr) : int
@@ -49,8 +56,11 @@ module WhileProgram{
         }
     }
 
+    // SOS transition: (s_1,cmd) --> (s_2,cmd') where cmd' is after 1 step execution from cmd
     function TransitionSmallStep(s: MState, c: Cmd) : (MState, Cmd)
     requires typeOK(s) && VariablesInCmd(c) <= s.Keys
+    ensures typeOK(TransitionSmallStep(s,c).0) && TransitionSmallStep(s,c).0.Keys == s.Keys
+    ensures VariablesInCmd(TransitionSmallStep(s,c).1) <= s.Keys
     decreases c
     {
         match c {
@@ -67,17 +77,35 @@ module WhileProgram{
             case Seq(c1, c2) => // sequential composition
                 match c1 {
                     case Skip => (s, c2) // removing the first skip
-                    case _ => 
+                    case c1 => 
                         var (s', c') := TransitionSmallStep(s, c1); (s', Seq(c', c2))
                 }
         }
         
     }
-    lemma AssignmentTest(s: MState, x: Variable, value: int)
-    requires typeOK(s) && x in s.Keys
+    method AssignmentTest(s: MState, x: Variable, y: Variable, value: int)
+    requires typeOK(s) && x in s.Keys && y in s.Keys && x != y
     {
         var (s1, c1) := TransitionSmallStep(s, Assn(x, Num(value)));
+        var (s2, c2) := TransitionSmallStep(s1, c1);
+        var (s3, c3) := TransitionSmallStep(s2, Seq(Skip, Assn(y, Num(value * 2))));
         assert s1[x] == value;
+        assert c1 == Skip == c2;
+        assert s2[x] == s1[x];
+        assert s3 == s2;
+        assert c3 == Assn(y, Num(value * 2));
+        var (s4, c4) := TransitionSmallStep(s3, c3);
+        assert s4[x] == s3[x] == value;
+        assert s4[y] == s4[x] * 2 == value * 2; // x == value, y == value * 2
+        var (s5, c5) := TransitionSmallStep(s4, Seq(Assn(x, Var(y)), Skip));
+        // The next two steps is what we need to remind Dafny in our proof.
+        var (s5', c5') := TransitionSmallStep(s4, Assn(x, Var(y)));
+        assert s5 == s5';
+        assert s5'[y] == value *2;
+        assert s5[y] == value * 2;
+        var (s6, c6) := TransitionSmallStep(s5, c5);
+        assert s5[y] == s4[y];
+        assert c6 == Skip;
     }
     lemma TransitionSmallStepTypeOK(s: MState, c: Cmd, s': MState, c': Cmd)
     requires typeOK(s) && VariablesInCmd(c) <= s.Keys
