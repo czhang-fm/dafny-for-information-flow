@@ -98,7 +98,7 @@ module WhileProgram{
         assert s4[x] == s3[x] == value;
         assert s4[y] == s4[x] * 2 == value * 2; // x == value, y == value * 2
         var (s5, c5) := TransitionSmallStep(s4, Seq(Assn(x, Var(y)), Skip));
-        // The next two steps is what we need to remind Dafny in our proof.
+        // The next two steps are what we need to remind Dafny for inductive cases in our proof.
         var (s5', c5') := TransitionSmallStep(s4, Assn(x, Var(y)));
         assert s5 == s5';
         assert s5'[y] == value *2;
