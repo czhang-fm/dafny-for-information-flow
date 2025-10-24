@@ -120,6 +120,7 @@ module VSISoundness {
     }
 
     // Confinement: if a program is typed High, then only High variables are updated during the execution
+    // Given s1 ==>* s2, then only High variables are updated iff s1 =Low= s2
     lemma {:induction false} Confinement(ctx: Context, s1: MState, s2: MState, c: Cmd, k: int)
     requires ctx.Keys == s1.Keys == s2.Keys
     requires typeOK(s1) && typeOK(s2)
@@ -159,7 +160,8 @@ module VSISoundness {
     }
 
     // Finally, the Noninterference property is proved in the following lemma
-    // 
+    // ctx |- c /\ ctx |- s1 =Low= s2 /\ s1 ==>* s1' /\ s2 ==>* s2'
+    // then ctx |- s1' =Low= s2'
     lemma {:induction false} Noninterference(ctx: Context, s1: MState, s2: MState, c: Cmd, s1': MState, s2': MState, k1: int, k2: int)
     requires ctx.Keys == s1.Keys == s2.Keys == s1'.Keys == s2'.Keys
     requires typeOK(s1) && typeOK(s2) && typeOK(s1') && typeOK(s2')
