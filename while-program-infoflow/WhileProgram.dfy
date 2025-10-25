@@ -28,6 +28,7 @@ module WhileProgram{
 
     /* The set of variables in an expression */
     function VariablesInExpr(e: Expr): set<Variable>
+    // ensures VariablesInExpr(e) <= variables
     {
         match e {
             case Num(_) => {}
@@ -37,6 +38,7 @@ module WhileProgram{
     }
     /* The set of variables in a program */
     function VariablesInCmd(c: Cmd): set<Variable>
+    // ensures VariablesInCmd(c) <= variables
     {
         match c {
             case Skip => {}
