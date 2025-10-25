@@ -60,6 +60,10 @@ module NontransitiveFlow{
     datatype PhraseType = ExprType(t: BaseType) | CmdType(t: BaseType) | Invalid
     type Context = map<Variable, BaseType>
 
+    predicate validContext(ctx: Context){
+        forall x :: x in ctx.Keys ==> ctx[x] <= labels
+    }
+
     function GetBaseType(t: PhraseType) : BaseType
     requires t != Invalid
     {
@@ -79,9 +83,12 @@ module NontransitiveFlow{
     }
     // The following defines a type system for the while programming language
     // We start with the expression types
-    //// In principle, this function should never produce Invalid
+    // In principle, this function should never produce Invalid
     function HasExprType(ctx: Context, e: Expr): PhraseType
-    requires VariablesInExpr(e) <= ctx.Keys
+    requires VariablesInExpr(e) <= ctx.Keys 
+    requires validContext(ctx)
+    ensures HasExprType(ctx, e) != Invalid
+    ensures GetBaseType(HasExprType(ctx, e)) <= labels
     decreases e
     {
         match e {
@@ -91,8 +98,9 @@ module NontransitiveFlow{
                 ExprType(ctx[x])
             case Plus(e1, e2) => 
                 var t1, t2 := HasExprType(ctx, e1), HasExprType(ctx, e2); 
-                if t1 == Invalid || t2 == Invalid then Invalid 
-                else ExprType(Join(GetBaseType(t1), GetBaseType(t2)))
+                // if t1 == Invalid || t2 == Invalid then Invalid 
+                // else ExprType(Join(GetBaseType(t1), GetBaseType(t2)))
+                ExprType(Join(GetBaseType(t1), GetBaseType(t2)))
         }
     }
     // The type checking process for a command/statement
@@ -102,21 +110,36 @@ module NontransitiveFlow{
     requires VariablesInCmd(c) <= ctx.Keys && pc <= labels
     requires VariablesInCmd(c) <= variables
     requires forall x :: x in ctx.Keys ==> ctx[x] <= labels
+    decreases c
     {
         match c {
             case Skip => CmdType({})
             case Assn(x, e) =>  
-                // t1 is the policy label of x; t2 represents information from RHS of assn
+                // t1 is the policy label of x
+                // t2 represents information from the RHS of assn
                 var t1, t2 := coarse_label[x], HasExprType(ctx, e); 
-                if t2 == Invalid then Invalid
-                else 
-                    // get the set of labels allowed to influence label(x)
-                    var flowsFrom := CanFlow(t1); 
-                    if (GetBaseType(t2) + pc) <= ctx[x] && (GetBaseType(t2) + pc) <= flowsFrom
-                    then CmdType({t1}) else Invalid
-            case If(e, c1, c2) => CmdType({})
-            case While(e, c1) => CmdType({})
-            case Seq(c1, c2) => CmdType({})
+                // if t2 == Invalid then Invalid
+                // else 
+                // get the set of labels allowed to influence label(x)
+                var flowsFrom := CanFlow(t1); 
+                if (GetBaseType(t2) + pc) <= ctx[x] && (GetBaseType(t2) + pc) <= flowsFrom
+                then CmdType({t1}) else Invalid
+            case If(e, c1, c2) => 
+                var te := HasExprType(ctx, e);
+                var t1 := HasCmdType(ctx, pc + GetBaseType(te), c1); 
+                var t2 := HasCmdType(ctx, pc + GetBaseType(te), c2);
+                // if te == Invalid || t1 == Invalid || t2 == Invalid then Invalid
+                if t1 == Invalid || t2 == Invalid then Invalid
+                else CmdType(Join(GetBaseType(t1), GetBaseType(t2)))
+            case While(e, c1) => 
+                var te := HasExprType(ctx, e);
+                var t1 := HasCmdType(ctx, pc + GetBaseType(te), c1); 
+                if t1 == Invalid then Invalid
+                else t1
+            case Seq(c1, c2) =>
+                var t1, t2 := HasCmdType(ctx, pc, c1), HasCmdType(ctx, pc, c2);
+                if t1 == Invalid || t2 == Invalid then Invalid
+                else CmdType(Join(GetBaseType(t1), GetBaseType(t2)))
         }
     }
 }
